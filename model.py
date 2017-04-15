@@ -21,7 +21,7 @@ EPOCH_SIZE = 16384
 # number of epochs to run
 EPOCHS = 5
 # model to train with
-MODEL = "comma"
+MODEL = "nvidia"
 # should we show the plots or not (e.g., turn off for non-interactive use)
 SHOW_PLOTS = False
 # offset of steering angle for left/right -> center
@@ -58,14 +58,21 @@ def data_generator(dl, data_path, batch_size=128):
         images = []
         angles = []
         for i in range(batch_size):
-            # left = mpimg.imread(data_path + rdl.left[i].strip())
-            center = mpimg.imread(data_path + rdl.center[i].strip())
-            # right = mpimg.imread(data_path + rdl.right[i].strip())
+            if rdl.camera[i] == 'center':
+                img = mpimg.imread(data_path + rdl.center[i].strip())
+            elif rdl.camera[i] == 'left':
+                img = mpimg.imread(data_path + rdl.left[i].strip())
+            elif rdl.camera[i] == 'right':
+                img = mpimg.imread(data_path + rdl.right[i].strip())
+            else:
+                print('ERROR: camera angle "{0}" is not implemented!'.format(rdl.camera[i]))
+                exit(1)
             if rdl.flip[i]:
-                center = np.fliplr(center)
-            # images.append(left)
-            images.append(center)
-            # images.append(right)
+                img = np.fliplr(img)
+            # TODO: augment with brightness change
+            # TODO: augment with random shadows
+            # TODO: augment with random image shifts
+            images.append(img)
             angles.append(rdl.steering[i])
         yield np.array(images), np.array(angles)
 
@@ -213,6 +220,7 @@ if __name__ == "__main__":
                         help='Which model to use: [simple, comma, nvidia]')
     parser.add_argument('--drivelog', type=str, default=DRIVING_LOG, help='CSV log of driving images & control data')
     parser.add_argument('--showplots', type=bool, default=SHOW_PLOTS, help='Show plots in X.')
+    parser.add_argument('--steeroffset', type=int, default=STEERING_OFFSET, help='Steering angle offset for right/left images.')
     args = parser.parse_args()
 
     # read in the driving log and plot some statistics
@@ -229,6 +237,20 @@ if __name__ == "__main__":
     fdl.steering = fdl.steering.apply(lambda x: x * -1)
     dl = dl.append(fdl, ignore_index=True)
 
+    # let's add a virtual right and left angles for each line so that we get better recovery overall
+    # we will adjust the steering angle here...
+    #   we'll just add a dl.camera column to the DataFrame so we can know which image(s) to pick later
+    rdl = dl.copy()
+    ldl = dl.copy()
+    dl['camera'] = pd.Series(['center'] * len(dl), index=dl.index)
+    rdl['camera'] = pd.Series(['right'] * len(rdl), index=rdl.index)
+    ldl['camera'] = pd.Series(['left'] * len(ldl), index=ldl.index)
+    rdl.steering = rdl.steering.apply(lambda x: x - args.steeroffset)
+    ldl.steering = ldl.steering.apply(lambda x: x + args.steeroffset)
+    dl = dl.append(rdl, ignore_index=True)
+    dl = dl.append(ldl, ignore_index=True)
+
+    # TODO: abridge large amount of small angle data which might cause overfitting
     # for dl_index, dl_row in dl.iterrows():
     #    print(dl_row.steering, dl_row.flip)
 
