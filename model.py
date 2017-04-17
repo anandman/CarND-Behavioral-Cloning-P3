@@ -17,7 +17,7 @@ DRIVING_LOG = expanduser("~/p3-sample-data/driving_log.csv")
 # batch size to use in generator
 BATCH_SIZE = 256
 # total samples per epoch
-EPOCH_SIZE = 16384
+EPOCH_SIZE = 25600
 # number of epochs to run
 EPOCHS = 5
 # model to train with
@@ -72,19 +72,21 @@ def data_generator(dl, data_path, batch_size=128):
             # TODO: augment with brightness change
             # TODO: augment with random shadows
             # TODO: augment with random image shifts
+            # crop top and bottom off the image to reduce parameter space
+            img = img[70:135, :, :]
             images.append(img)
             angles.append(rdl.steering[i])
         yield np.array(images), np.array(angles)
 
 
-def simple_test_model():
+def simple_test_model(input_shape=(160, 320, 3)):
     """Very simple model to test out flow"""
 
     # create model
     model = Sequential()
 
     # normalize pixels to between -1 <= x <= 1
-    model.add(Lambda(lambda x: (x / 255.0) * 2 - 1, input_shape=(160,320,3)))
+    model.add(Lambda(lambda x: (x / 255.0) * 2 - 1, input_shape=input_shape))
 
     model.add(Flatten())
     model.add(Dense(1))
@@ -94,11 +96,11 @@ def simple_test_model():
     return model
 
 
-def comma_ai_model():
+def comma_ai_model(input_shape=(160, 320, 3)):
     """Steering model from comma.ai found at https://github.com/commaai/research/blob/master/train_steering_model.py"""
 
     model = Sequential()
-    model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(160, 320, 3)))
+    model.add(Lambda(lambda x: x/127.5 - 1., input_shape=input_shape))
     model.add(Conv2D(16, (8, 8), padding="same", strides=(4, 4), activation="elu"))
     # model.add(ELU())
     model.add(Conv2D(32, (5, 5), padding="same", strides=(2, 2), activation="elu"))
@@ -117,19 +119,19 @@ def comma_ai_model():
     return model
 
 
-def nvidia_model():
+def nvidia_model(input_shape=(160, 320, 3)):
     """Steering model from NVIDIA paper at https://arxiv.org/pdf/1604.07316.pdf"""
 
     # had to take a guess at activation functions, optimizer, and loss function
     model = Sequential()
-    model.add(Lambda(lambda x: (x / 255.0) * 2 - 1, input_shape=(160,320,3)))
+    model.add(Lambda(lambda x: (x / 255.0) * 2 - 1, input_shape=input_shape))
     model.add(Conv2D(24, (5, 5), strides= (2, 2), activation="relu"))
     model.add(Conv2D(36, (5, 5), strides= (2, 2), activation="relu"))
     model.add(Conv2D(48, (5, 5), strides= (2, 2), activation="relu"))
     model.add(Conv2D(64, (3, 3), strides= (1, 1), activation="relu"))
     model.add(Conv2D(64, (3, 3), strides= (1, 1), activation="relu"))
     model.add(Flatten())
-    model.add(Dense(1164, activation="relu"))
+    # model.add(Dense(1164, activation="relu"))  #### OOOPS!!!!
     model.add(Dense(100, activation="relu"))
     model.add(Dense(50, activation="relu"))
     model.add(Dense(10, activation="relu"))
@@ -143,15 +145,24 @@ def nvidia_model():
 def train(dl, data_path, batch_size=BATCH_SIZE, epoch_size=EPOCH_SIZE, epochs=EPOCHS, modelname=MODEL):
     """Train "epoch_size" samples for "epoch" epochs with a batch size of "batch_size" on model "modelname"."""
 
+    # TODO: implement load from checkpoint
     if modelname == 'simple':
-        model = simple_test_model()
+        model = simple_test_model(input_shape=(65, 320, 3))
+        # model = simple_test_model(input_shape=(160, 320, 3))
     elif modelname == 'comma':
-        model = comma_ai_model()
+        model = comma_ai_model(input_shape=(65, 320, 3))
+        # model = comma_ai_model(input_shape=(160, 320, 3))
     elif modelname == 'nvidia':
-        model = nvidia_model()
+        model = nvidia_model(input_shape=(65, 320, 3))
+        # model = nvidia_model(input_shape=(160, 320, 3))
     else:
         print('ERROR: model "{0}" is not implemented!'.format(modelname))
         exit(1)
+
+    model.summary()
+
+    # TODO: implement early stopping callback
+    # TODO: implement model checkpointing when validation loss improves
 
     # train model
     print("Training {0} model...".format(modelname))
@@ -196,14 +207,16 @@ def plot_training_history(hist, filename=''):
     plt.close()
 
 
-
 def plot_histogram(arr, label="Targets", filename=''):
     """Plot histogram of 1D array"""
 
     bins, counts = np.unique(arr, return_counts=True)
-    plt.bar(bins, counts, align='center')
+    plt.bar(bins, counts, width=0.01, align='center')
+    plt.xticks(np.arange(-1.25, 1.5, 0.25))
+    plt.ylim(0.1, 20000)
     plt.ylabel(label + ' Count')
     plt.xlabel(label + ' Bins')
+    plt.yscale('log')
     if filename:
         plt.savefig(filename)
     if args.showplots:
@@ -227,6 +240,11 @@ if __name__ == "__main__":
     dl, data_path = read_driving_log(args.drivelog)
     plot_histogram(dl.steering, label="Initial Steering Angle", filename="initial_angles.png")
 
+    # TODO: abridge large amount of small angle data which might cause overfitting
+    # for dl_index, dl_row in dl.iterrows():
+    #     if dl_row.steering == 0:
+    #         dl.drop(dl_index, inplace=True)
+
     # let's add a virtual flip for every line so that we can "balance" out the right/left steering
     # we will adjust the steering angle here...
     #   but not read in or actually flip the image...
@@ -249,10 +267,6 @@ if __name__ == "__main__":
     ldl.steering = ldl.steering.apply(lambda x: x + args.steeroffset)
     dl = dl.append(rdl, ignore_index=True)
     dl = dl.append(ldl, ignore_index=True)
-
-    # TODO: abridge large amount of small angle data which might cause overfitting
-    # for dl_index, dl_row in dl.iterrows():
-    #    print(dl_row.steering, dl_row.flip)
 
     # plot the steering angle histogram again to check it
     plot_histogram(dl.steering, label="Augmented Steering Angle", filename="augmented_angles.png")
