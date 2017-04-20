@@ -1,4 +1,4 @@
-#**Behavioral Cloning** 
+# Behavioral Cloning
 
 ## Project Description
 
@@ -61,9 +61,9 @@ You will likely find that the sample data alone is insufficient for proper train
 
 
 
-##Model Architecture and Training Strategy
+## Model Architecture and Training Strategy
 
-####Convolutional Neural Network Model
+#### Convolutional Neural Network Model
 The initial code started with a very simple model (in function `simple_test_model` in [model.py](model.py)) to ensure the rest of the code ran properly. The first real model was the [steering model](https://github.com/commaai/research/blob/master/train_steering_model.py) written by comma.ai (implemented in function `comma_ai_model` in [model.py](model.py)) for their research. Though it trained reasonable well, it had over 3 million parameters and seemed inefficient.
 
 The final implementation starts with the [NVIDIA steering model](https://arxiv.org/pdf/1604.07316.pdf) (implemented in function `nvidia_model` in [model.py](model.py)) that had much a much lower number of parameters (250K according to the linked paper). In the implementation here, the size of the images were different due to cropping so the parameter space was larger, at about 350K. A ReLU activation function is used to introduce non-linearity even though the paper doesn't mention what activation function they used. The image data is normalized between -1 and +1 within a Keras `Lambda()` layer. Finally, the model uses an Adam optimizer so the learning rate is adaptive rather than fixed or simple decaying. The model is summarized in the table below.
@@ -87,7 +87,7 @@ The final implementation starts with the [NVIDIA steering model](https://arxiv.o
 
 NB: I made one very crucial mistake in early implementations of the model, adding an extra `Dense(1164)` layer right after the `Flatten()`. It turns out that the Flatten layer in NVIDIA's case, with a 66x200x3 initial image size, ends up with 1164 outputs and that's what their diagram referred to. This caused the parameter space to blow up and I didn't realize it until I added the `model.summary()` to view the model back.
 
-####Training Data & Augmentation
+#### Training Data & Augmentation
 The model was trained using the center camera from the [sample training data](https://d17h27t6h515a5.cloudfront.net/topher/2016/December/584f6edd_data/data.zip) initially. Since the training data was based on a reasonably good driver, the model would quickly overfit to the data and result in lots of problem areas where the model would drive off the road. To fix this, the data was augmented using the following techniques.
 - Left & right camera images were used, with a medium offset of 0.25 degrees to help steer away from the edges back to the center
 - All center, left, and right images were flipped, along with their respective steering angles, to account for driving in either direction.
@@ -95,15 +95,15 @@ The model was trained using the center camera from the [sample training data](ht
 
 The first two techniques were implemented as part of the preprocessing methods described below.
 
-####Preprocessing
+#### Preprocessing
 The first preprocessing done was within the Pandas DataFrame that contains the driving log. The DataFrame is duplicated for each of left and right images in addition to the center and then duplicated again for all their flipped versions, all while adjusting the steering angle appropriately. The DataFrame is also augmented with additional columns prescribing which camera image to use and whether or not to flip it. Rather than actually read and store all the images and their flipped versions, this was much more memory and compute efficient. The actual image read and optional flip was done in the generator described in the training section below.
 
 The other preprocessing step done, again, in the generator, was to crop the top and bottom of the images since that only contains the sky or car hood and are not useful. This reduces the image sizes and model parameter space significantly.
 
-####Training
+#### Training
 To train the model, the data set was split into training and validation data randomly, with the validation set being 20% of the training set. However, this wasn't done in a traditional manner in an effort to save memory space. The implementation uses a generator (in function `data_generator` in [model.py](model.py)) that reads in the Pandas DataFrame with the regular driving log along with the additional columns on which camera angle and flip to use. This information is used to read the appropriate image, do the flip, crop the image, and yield the data back to the Keras `model.fit_generator()` routine for both the training and validation data sets.
 
-####Future Work
+#### Future Work
 Here are some ideas for future work to improve how the model generalizes. The lack of these features in the current implementation are likely the reasons why the model did so [poorly on the second track](video2.mp4).
 - overall brightness and color temperature changes to simulate twilight, dusk, and night
 - random shadows to simulate clouds, etc.
