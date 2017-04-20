@@ -52,10 +52,11 @@ python video.py image_directory
 ```
 
 **To re-train the model, execute the following command:**
-NB: This command really should be run on a GPU accelerated tensorflow-gpu machine like an AWS p2.xlarge or g2.2xlarge instance.
 ```sh
 python model.py
 ```
+
+NB: This command really should be run on a GPU accelerated tensorflow-gpu machine like an AWS p2.xlarge or g2.2xlarge instance.
 
 You will likely find that the sample data alone is insufficient for proper training, in which case you will need to run the simulator in Training mode, drive problematic portions of the track while recording, and augment the sample training data with the newly recorded data.
 
