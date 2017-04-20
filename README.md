@@ -106,4 +106,4 @@ In addition, here are some ideas of how to speed up and improve the general oper
 
 Finally, it turns out that there are quite a few small steering angles, especially right around 0. This may cause the model to want to steer "drunk" with tiny, unnecessary corrections. Future implementations would experiment with filtering out these small angles.
 
-| ![initial angles](images/run4-nvidia-initial_angles.png =320x240) | ![augmented angles](images/run4-nvidia-augmented_angles.png =320x240) |
+<img src="images/run4-nvidia-initial_angles.png" width="320" height="240"> <img src="images/run4-nvidia-augmented_angles.png" width="320" height="240">
